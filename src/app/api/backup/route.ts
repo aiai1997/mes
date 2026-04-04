@@ -91,7 +91,7 @@ const createBackup = createApiHandler(
         throw error;
       }
     },
-    ['system:admin']
+    ['backup:create']
   )
 );
 
@@ -124,7 +124,7 @@ const getBackupList = createApiHandler(
 
       return { backups: files };
     },
-    ['system:admin']
+    ['backup:create']
   )
 );
 
@@ -201,7 +201,7 @@ const restoreBackup = createApiHandler(
         throw error;
       }
     },
-    ['system:admin']
+    ['backup:restore']
   )
 );
 
