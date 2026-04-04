@@ -65,6 +65,15 @@ export async function createFinancialTransaction(data: {
   operator?: string;
   operatorId?: string;
 }): Promise<FinancialTransaction> {
+  // 权限检查：只有财务角色可以创建财务流水
+  if (data.operatorId) {
+    const { checkUserPermission } = await import('./rbac-service');
+    const hasPermission = await checkUserPermission(data.operatorId, ['finance:create']);
+    if (!hasPermission) {
+      throw new Error('无权限创建财务流水');
+    }
+  }
+
   const client = getClient();
 
   const transactionData = {

@@ -207,8 +207,20 @@ export function withDataPermissionFilter<T extends any[], R extends any[]>(
     try {
       const result = await handler(...args);
 
-      // 这里应该应用数据权限过滤
-      // 由于需要用户信息，这里简化处理，实际实现需要从上下文获取
+      // 从请求上下文中获取用户ID（这里需要根据实际的认证中间件调整）
+      const userId = (global as any).currentUserId; // 临时方案，实际应该从middleware传递
+
+      if (userId && Array.isArray(result)) {
+        // 获取数据权限过滤器
+        const { getDataPermissionFilter, applyDataPermissionFilter } = await import('./rbac-service');
+        const filter = await getDataPermissionFilter(userId, resource);
+
+        if (filter) {
+          // 应用数据权限过滤
+          const filteredResult = applyDataPermissionFilter(result, filter);
+          return createSuccessResponse(filteredResult as R);
+        }
+      }
 
       return createSuccessResponse(result);
     } catch (error) {
@@ -222,17 +234,23 @@ export function withDataPermissionFilter<T extends any[], R extends any[]>(
  * 财务数据隐藏包装器（对非财务人员隐藏敏感价格信息）
  */
 export function withFinanceDataMask<T extends any[], R>(
-  handler: (...args: T) => Promise<R>,
-  userPermissions: string[]
+  handler: (...args: T) => Promise<R>
 ) {
   return async (...args: T): Promise<ApiResponse<R>> => {
     try {
       const result = await handler(...args);
 
-      // 如果用户没有财务权限，隐藏敏感字段
-      if (!userPermissions.includes('finance:view')) {
-        // 这里需要根据实际数据结构进行字段隐藏
-        // 例如：maskFinancialFields(result);
+      // 获取当前用户ID并检查财务权限
+      const userId = (global as any).currentUserId;
+      if (userId) {
+        const { checkUserPermission } = await import('./rbac-service');
+        const hasFinanceView = await checkUserPermission(userId, ['finance:view']);
+
+        // 如果用户没有财务权限，隐藏敏感字段
+        if (!hasFinanceView) {
+          const maskedResult = maskFinancialFields(result);
+          return createSuccessResponse(maskedResult);
+        }
       }
 
       return createSuccessResponse(result);

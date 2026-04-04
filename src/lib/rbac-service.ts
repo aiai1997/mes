@@ -20,8 +20,128 @@ function getClient() {
 }
 
 /**
- * 获取用户权限信息
+ * 记录权限变更操作日志
  */
+async function logPermissionChange(
+  operatorId: string,
+  action: string,
+  resourceType: string,
+  resourceId: string,
+  oldData?: any,
+  newData?: any,
+  description?: string
+): Promise<void> {
+  try {
+    const { createOperationLog } = await import('./operation-log-middleware');
+    await createOperationLog({
+      module: '权限管理',
+      action,
+      description: description || `${action}操作`,
+      operatorId,
+      resourceId,
+      resourceType,
+      oldData,
+      newData,
+      status: '成功'
+    });
+  } catch (error) {
+    console.error('记录权限变更日志失败:', error);
+    // 不抛出错误，避免影响主要业务逻辑
+  }
+}
+
+/**
+ * 为用户分配角色
+ */
+export async function assignUserRole(userId: string, roleId: string, operatorId: string): Promise<void> {
+  const client = getClient();
+
+  // 检查角色是否存在
+  const { data: role, error: roleError } = await client
+    .from('roles')
+    .select('id, role_name')
+    .eq('id', roleId)
+    .single();
+
+  if (roleError || !role) {
+    throw new Error('角色不存在');
+  }
+
+  // 检查是否已有该角色
+  const { data: existing, error: existingError } = await client
+    .from('user_roles')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('role_id', roleId)
+    .single();
+
+  if (existingError && existingError.code !== 'PGRST116') { // PGRST116 = no rows returned
+    throw existingError;
+  }
+
+  if (existing) {
+    throw new Error('用户已拥有该角色');
+  }
+
+  // 分配角色
+  const { error: insertError } = await client
+    .from('user_roles')
+    .insert({
+      user_id: userId,
+      role_id: roleId
+    });
+
+  if (insertError) throw insertError;
+
+  // 记录操作日志
+  await logPermissionChange(
+    operatorId,
+    '分配角色',
+    'user_role',
+    `${userId}_${roleId}`,
+    null,
+    { userId, roleId, roleName: role.role_name },
+    `为用户分配角色: ${role.role_name}`
+  );
+}
+
+/**
+ * 移除用户角色
+ */
+export async function removeUserRole(userId: string, roleId: string, operatorId: string): Promise<void> {
+  const client = getClient();
+
+  // 获取角色信息用于日志
+  const { data: role, error: roleError } = await client
+    .from('roles')
+    .select('id, role_name')
+    .eq('id', roleId)
+    .single();
+
+  if (roleError || !role) {
+    throw new Error('角色不存在');
+  }
+
+  // 移除角色
+  const { error: deleteError } = await client
+    .from('user_roles')
+    .delete()
+    .eq('user_id', userId)
+    .eq('role_id', roleId);
+
+  if (deleteError) throw deleteError;
+
+  // 记录操作日志
+  await logPermissionChange(
+    operatorId,
+    '移除角色',
+    'user_role',
+    `${userId}_${roleId}`,
+    { userId, roleId, roleName: role.role_name },
+    null,
+    `从用户移除角色: ${role.role_name}`
+  );
+}
 export async function getUserPermissionInfo(userId: string): Promise<UserPermissionInfo | null> {
   const client = getClient();
 
@@ -256,20 +376,22 @@ export function applyDataPermissionFilter<T extends Record<string, any>>(
   teamField = 'team_id'
 ): T[] {
   if (!filter.conditions || filter.conditions.length === 0) {
-    // 如果没有特殊数据权限配置，默认按部门隔离
+    // 如果没有特殊数据权限配置，默认按部门和团队隔离
     return data.filter(item => {
       // 管理员和老板可以看到所有数据
       if (filter.userRoles.some(roleId => {
         // 这里需要根据实际角色ID判断是否为管理员/老板
-        return true; // 暂时允许，实际需要配置
+        return roleId === 'admin' || roleId === 'boss'; // 暂时允许，实际需要配置
       })) {
         return true;
       }
 
-      // 普通员工只能看到自己部门的数据
-      return item[departmentField] === filter.department ||
-             item[creatorField] === filter.userId ||
-             item[teamField] === filter.teamId;
+      // 普通员工只能看到自己部门和团队的数据
+      const departmentMatch = item[departmentField] === filter.department;
+      const creatorMatch = item[creatorField] === filter.userId;
+      const teamMatch = item[teamField] === filter.teamId;
+
+      return departmentMatch || creatorMatch || teamMatch;
     });
   }
 

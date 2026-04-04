@@ -217,6 +217,12 @@ export function middleware(request: NextRequest) {
         }
       );
     }
+
+    // 设置全局用户ID供数据权限过滤使用
+    const userId = request.headers.get('x-user-id');
+    if (userId) {
+      (global as any).currentUserId = userId;
+    }
   }
   
   // 添加安全响应头
