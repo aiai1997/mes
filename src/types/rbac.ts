@@ -171,6 +171,8 @@ export interface DataPermissionFilter {
   userId: string;
   userRoles: string[];
   department?: string;
+  teamId?: string;
+  teamName?: string;
   conditions: DataPermission[];
 }
 
