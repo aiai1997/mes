@@ -80,6 +80,7 @@ async function initializeDefaultRBACData() {
   const defaultPermissions = [
     // 菜单权限
     { permission_code: 'menu:dashboard', permission_name: '仪表板访问', resource: 'menu', action: 'read' },
+    { permission_code: 'menu:screen', permission_name: '数据大屏', resource: 'menu', action: 'read' },
     { permission_code: 'menu:orders', permission_name: '订单管理', resource: 'menu', action: 'read' },
     { permission_code: 'menu:bom', permission_name: 'BOM管理', resource: 'menu', action: 'read' },
     { permission_code: 'menu:cutting', permission_name: '裁床管理', resource: 'menu', action: 'read' },
@@ -89,6 +90,7 @@ async function initializeDefaultRBACData() {
     { permission_code: 'menu:logs', permission_name: '操作日志', resource: 'menu', action: 'read' },
 
     // API权限
+    { permission_code: 'dashboard:view', permission_name: '查看数据大屏', resource: 'api', action: 'read' },
     { permission_code: 'order:create', permission_name: '创建订单', resource: 'api', action: 'create' },
     { permission_code: 'order:read', permission_name: '查看订单', resource: 'api', action: 'read' },
     { permission_code: 'order:update', permission_name: '编辑订单', resource: 'api', action: 'update' },
@@ -97,6 +99,8 @@ async function initializeDefaultRBACData() {
     { permission_code: 'bom:audit', permission_name: '审核BOM', resource: 'api', action: 'audit' },
     { permission_code: 'finance:view', permission_name: '查看财务数据', resource: 'api', action: 'read' },
     { permission_code: 'finance:audit', permission_name: '财务审核', resource: 'api', action: 'audit' },
+    { permission_code: 'material:manage', permission_name: '物料管理', resource: 'api', action: 'manage' },
+    { permission_code: 'material:scan', permission_name: '物料扫描', resource: 'api', action: 'scan' },
   ];
 
   for (const permission of defaultPermissions) {
@@ -109,13 +113,14 @@ async function initializeDefaultRBACData() {
   // 初始化默认菜单
   const defaultMenus = [
     { menu_code: 'dashboard', menu_name: '仪表板', path: '/dashboard', sort_order: 1 },
-    { menu_code: 'orders', menu_name: '订单管理', path: '/dashboard/orders', sort_order: 2 },
-    { menu_code: 'bom', menu_name: 'BOM管理', path: '/dashboard/bom', sort_order: 3 },
-    { menu_code: 'cutting', menu_name: '裁床管理', path: '/dashboard/cutting', sort_order: 4 },
-    { menu_code: 'workshop', menu_name: '车间管理', path: '/dashboard/workshop', sort_order: 5 },
-    { menu_code: 'quality', menu_name: '品质管理', path: '/dashboard/quality', sort_order: 6 },
-    { menu_code: 'finance', menu_name: '财务管理', path: '/dashboard/finance', sort_order: 7 },
-    { menu_code: 'logs', menu_name: '操作日志', path: '/dashboard/logs', sort_order: 8 },
+    { menu_code: 'screen', menu_name: '数据大屏', path: '/dashboard/screen', sort_order: 2 },
+    { menu_code: 'orders', menu_name: '订单管理', path: '/dashboard/orders', sort_order: 3 },
+    { menu_code: 'bom', menu_name: 'BOM管理', path: '/dashboard/bom', sort_order: 4 },
+    { menu_code: 'cutting', menu_name: '裁床管理', path: '/dashboard/cutting', sort_order: 5 },
+    { menu_code: 'workshop', menu_name: '车间管理', path: '/dashboard/workshop', sort_order: 6 },
+    { menu_code: 'quality', menu_name: '品质管理', path: '/dashboard/quality', sort_order: 7 },
+    { menu_code: 'finance', menu_name: '财务管理', path: '/dashboard/finance', sort_order: 8 },
+    { menu_code: 'logs', menu_name: '操作日志', path: '/dashboard/logs', sort_order: 9 },
   ];
 
   for (const menu of defaultMenus) {
