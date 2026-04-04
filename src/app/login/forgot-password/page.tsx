@@ -70,21 +70,33 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    const destination = verificationMethod === 'email' ? user.email : user.phone;
+    if (!destination) {
+      setError(`该用户未绑定${verificationMethod === 'email' ? '邮箱' : '手机号'}`);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // 模拟发送验证码
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      console.log(`发送验证码 ${code} 到 ${verificationMethod === 'email' ? user.email : user.phone}`);
-      
-      // 存储验证码（实际应用中应存储在服务器端）
-      localStorage.setItem(`erp_verification_code_${user.id}`, code);
-      localStorage.setItem(`erp_verification_expiry_${user.id}`, (Date.now() + 10 * 60 * 1000).toString()); // 10分钟过期
+      const response = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: verificationMethod,
+          destination,
+          purpose: 'reset_password',
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || '发送验证码失败');
+      }
 
       setSuccess(`验证码已发送到${verificationMethod === 'email' ? '邮箱' : '手机'}`);
       setCountdown(60);
 
-      // 开始倒计时
       const timer = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
@@ -95,7 +107,7 @@ export default function ForgotPasswordPage() {
         });
       }, 1000);
     } catch (err) {
-      setError('发送验证码失败，请稍后重试');
+      setError(err instanceof Error ? err.message : '发送验证码失败，请稍后重试');
     } finally {
       setIsLoading(false);
     }
@@ -116,32 +128,34 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    const destination = verificationMethod === 'email' ? user.email : user.phone;
+    if (!destination) {
+      setError('验证目标信息缺失');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // 获取存储的验证码和过期时间
-      const storedCode = localStorage.getItem(`erp_verification_code_${user.id}`);
-      const expiryTime = localStorage.getItem(`erp_verification_expiry_${user.id}`);
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: verificationMethod,
+          destination,
+          code: verificationCode,
+          purpose: 'reset_password',
+        }),
+      });
 
-      if (!storedCode || !expiryTime) {
-        setError('验证码已过期，请重新发送');
-        return;
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || '验证码验证失败');
       }
 
-      if (Date.now() > parseInt(expiryTime)) {
-        setError('验证码已过期，请重新发送');
-        return;
-      }
-
-      if (verificationCode !== storedCode) {
-        setError('验证码错误');
-        return;
-      }
-
-      // 验证成功，进入重置密码步骤
       setStep(3);
     } catch (err) {
-      setError('验证失败，请稍后重试');
+      setError(err instanceof Error ? err.message : '验证失败，请稍后重试');
     } finally {
       setIsLoading(false);
     }

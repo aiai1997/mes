@@ -61,6 +61,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { getCurrentUser, clearCurrentUser, type CurrentUser } from '@/types/user';
+import { getUserMenuTree } from '@/lib/rbac-service';
 import { useTheme } from '@/components/providers/ThemeProvider';
 import { useInitDemoData } from '@/hooks/useInitDemoData';
 import { useLanguage, languageNames, type Language } from '@/lib/i18n';
@@ -280,8 +281,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login');
   };
 
+  const [userMenuTree, setUserMenuTree] = useState<MenuItem[]>([]);
+
+  // 获取用户菜单树
+  useEffect(() => {
+    const loadUserMenu = async () => {
+      if (currentUser?.id) {
+        try {
+          const menuTree = await getUserMenuTree(currentUser.id);
+          // 转换为扁平结构用于现有逻辑
+          const flatMenus: MenuItem[] = [];
+          menuTree.forEach(group => {
+            flatMenus.push(...group.children);
+          });
+          setUserMenuTree(flatMenus);
+        } catch (error) {
+          console.error('获取用户菜单失败:', error);
+        }
+      }
+    };
+
+    loadUserMenu();
+  }, [currentUser?.id]);
+
   const hasPermission = (permissions?: string[]) => {
     if (!permissions || !currentUser) return true;
+    // 使用新的RBAC逻辑：检查用户是否有菜单权限
+    if (userMenuTree.length > 0) {
+      // 如果有菜单树数据，优先使用菜单权限
+      return userMenuTree.some(menu => {
+        const menuPath = menu.path;
+        return permissions?.some(perm => {
+          // 简单的权限匹配逻辑，可以根据需要扩展
+          return menuPath.includes(perm.split(':')[0]);
+        });
+      });
+    }
+    // 降级到原有权限检查
     return permissions.some(perm => currentUser.permissions.includes(perm));
   };
 

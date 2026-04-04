@@ -15,6 +15,8 @@ import {
   verifyPassword, 
   generateUUID,
   validateUsername,
+  validateEmail,
+  validatePhone,
   validatePasswordStrength,
   isAccountLocked,
   recordLoginAttempt,
@@ -214,6 +216,114 @@ export function getUserById(id: string): User | null {
 // 根据用户名获取用户
 export function getUserByUsername(username: string): User | null {
   return getUsers().find(u => u.username === username) || null;
+}
+
+export function getUserByEmail(email: string): User | null {
+  if (!email) return null;
+  return getUsers().find(u => u.email?.toLowerCase() === email.toLowerCase()) || null;
+}
+
+export function getUserByPhone(phone: string): User | null {
+  if (!phone) return null;
+  const normalized = phone.replace(/\D/g, '');
+  return getUsers().find(u => u.phone?.replace(/\D/g, '') === normalized) || null;
+}
+
+export function isEmailExists(email: string, excludeId?: string): boolean {
+  if (!email) return false;
+  const normalized = email.toLowerCase();
+  return getUsers().some(u => u.email?.toLowerCase() === normalized && u.id !== excludeId);
+}
+
+export function isPhoneExists(phone: string, excludeId?: string): boolean {
+  if (!phone) return false;
+  const normalized = phone.replace(/\D/g, '');
+  return getUsers().some(u => u.phone?.replace(/\D/g, '') === normalized && u.id !== excludeId);
+}
+
+export async function registerUser(params: {
+  username: string;
+  password: string;
+  email?: string;
+  phone?: string;
+  realName?: string;
+  role?: UserRole;
+}): Promise<User> {
+  const cleanUsername = escapeHtml(params.username.trim());
+  const email = params.email?.trim().toLowerCase();
+  const phone = params.phone?.trim();
+
+  if (!cleanUsername) {
+    throw new Error('用户名不能为空');
+  }
+
+  if (!validateUsername(cleanUsername)) {
+    throw new Error('用户名格式不正确，需以字母开头，支持字母、数字和下划线，长度3-20位');
+  }
+
+  if (isUsernameExists(cleanUsername)) {
+    throw new Error('用户名已存在');
+  }
+
+  if (!params.password || params.password.length < 8) {
+    throw new Error('密码长度至少为8位');
+  }
+
+  const passwordStrength = validatePasswordStrength(params.password);
+  if (!passwordStrength.isValid) {
+    throw new Error(`密码强度不足：${passwordStrength.suggestions.join('、')}`);
+  }
+
+  if (email) {
+    if (!validateEmail(email)) {
+      throw new Error('邮箱格式不正确');
+    }
+    if (isEmailExists(email)) {
+      throw new Error('邮箱已被占用');
+    }
+  }
+
+  if (phone) {
+    if (!validatePhone(phone)) {
+      throw new Error('手机号格式不正确');
+    }
+    if (isPhoneExists(phone)) {
+      throw new Error('手机号已被占用');
+    }
+  }
+
+  if (!email && !phone) {
+    throw new Error('请至少提供邮箱或手机号之一');
+  }
+
+  const passwordHash = await hashPassword(params.password);
+  const role = params.role ?? '业务员';
+  const user: User = {
+    id: generateUUID(),
+    username: cleanUsername,
+    password: passwordHash,
+    realName: params.realName ? escapeHtml(params.realName.trim()) : cleanUsername,
+    role,
+    department: '业务部',
+    phone,
+    email,
+    permissions: ROLE_PERMISSIONS[role],
+    status: '启用',
+    createdAt: new Date().toISOString(),
+    passwordChangedAt: new Date().toISOString(),
+  };
+
+  saveUser(user);
+
+  logSecurityEvent({
+    type: 'security_event',
+    severity: 'medium',
+    action: '用户注册',
+    details: `新用户 ${user.username} 注册成功`,
+    success: true,
+  });
+
+  return user;
 }
 
 /**

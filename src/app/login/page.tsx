@@ -192,19 +192,27 @@ export default function LoginPage() {
 
           {/* 记住密码和找回密码 */}
           <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center">
-              <Checkbox
-                id="remember"
-                checked={rememberPassword}
-                onCheckedChange={(checked) => setRememberPassword(checked as boolean)}
-                disabled={isLoading}
-              />
-              <label
-                htmlFor="remember"
-                className="ml-2 text-sm text-muted-foreground cursor-pointer select-none"
+            <div className="flex items-center gap-3">
+              <div className="flex items-center">
+                <Checkbox
+                  id="remember"
+                  checked={rememberPassword}
+                  onCheckedChange={(checked) => setRememberPassword(checked as boolean)}
+                  disabled={isLoading}
+                />
+                <label
+                  htmlFor="remember"
+                  className="ml-2 text-sm text-muted-foreground cursor-pointer select-none"
+                >
+                  记住密码
+                </label>
+              </div>
+              <a
+                href="/login/register"
+                className="text-sm text-primary hover:text-primary/80 transition-colors"
               >
-                记住密码
-              </label>
+                注册账号
+              </a>
             </div>
             <a
               href="/login/forgot-password"

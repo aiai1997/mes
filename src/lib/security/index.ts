@@ -303,6 +303,16 @@ export function validateId(id: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
+// ==================== 验证码生成 ====================
+
+/**
+ * 生成6位数字验证码
+ */
+export function generateVerificationCode(): string {
+  const code = Math.floor(100000 + Math.random() * 900000);
+  return code.toString();
+}
+
 // ==================== 安全的ID生成 ====================
 
 /**

@@ -10,6 +10,8 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { checkUserPermission } from '@/lib/rbac-service';
+import { getSupabaseClient } from '@/storage/database/supabase-client';
 
 // 速率限制配置
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1分钟
@@ -58,6 +60,113 @@ if (typeof setInterval !== 'undefined') {
   setInterval(cleanupRateLimitMap, 5 * 60 * 1000);
 }
 
+/**
+ * 检查是否为公开API（不需要权限验证）
+ */
+function isPublicApi(pathname: string): boolean {
+  const publicPaths = [
+    '/api/auth/login',
+    '/api/auth/logout',
+    '/api/auth/send-code',
+    '/api/auth/verify-code',
+    '/api/health',
+    '/api/public',
+  ];
+  
+  return publicPaths.some(path => pathname.startsWith(path));
+}
+
+/**
+ * 检查API权限
+ */
+async function checkApiPermission(request: NextRequest): Promise<{ allowed: boolean; error?: string }> {
+  try {
+    // 从请求头获取用户ID（假设通过认证中间件设置）
+    const userId = request.headers.get('x-user-id');
+    if (!userId) {
+      return { allowed: false, error: '未认证用户' };
+    }
+    
+    // 验证用户是否存在且状态正常
+    const client = getSupabaseClient();
+    const { data: user, error: userError } = await client
+      .from('users')
+      .select('id, status')
+      .eq('id', userId)
+      .single();
+    
+    if (userError || !user || user.status !== '启用') {
+      return { allowed: false, error: '用户不存在或已被禁用' };
+    }
+    
+    // 根据路径确定所需权限
+    const requiredPermissions = getRequiredPermissions(request.nextUrl.pathname, request.method);
+    
+    if (requiredPermissions.length === 0) {
+      return { allowed: true }; // 不需要特殊权限
+    }
+    
+    // 检查用户权限
+    const hasPermission = await checkUserPermission(userId, requiredPermissions);
+    
+    return { allowed: hasPermission };
+  } catch (error) {
+    console.error('权限检查失败:', error);
+    return { allowed: false, error: '权限检查失败' };
+  }
+}
+
+/**
+ * 根据API路径和方法获取所需权限
+ */
+function getRequiredPermissions(pathname: string, method: string): string[] {
+  // API权限映射表
+  const permissionMap: Record<string, Record<string, string[]>> = {
+    '/api/orders': {
+      'GET': ['order:read'],
+      'POST': ['order:create'],
+      'PUT': ['order:update'],
+      'DELETE': ['order:delete'],
+    },
+    '/api/bom': {
+      'GET': ['bom:read'],
+      'POST': ['bom:create'],
+      'PUT': ['bom:update', 'bom:audit'],
+      'DELETE': ['bom:delete'],
+    },
+    '/api/cutting': {
+      'GET': ['cutting:read'],
+      'POST': ['cutting:create'],
+      'PUT': ['cutting:update'],
+      'DELETE': ['cutting:delete'],
+    },
+    '/api/workshop': {
+      'GET': ['workshop:read'],
+      'POST': ['workshop:report'],
+      'PUT': ['workshop:audit'],
+    },
+    '/api/finance': {
+      'GET': ['finance:view'],
+      'POST': ['finance:create'],
+      'PUT': ['finance:audit'],
+      'DELETE': ['finance:delete'],
+    },
+    '/api/logs': {
+      'GET': ['logs:read'],
+    },
+  };
+  
+  // 精确匹配路径
+  for (const [path, methods] of Object.entries(permissionMap)) {
+    if (pathname.startsWith(path)) {
+      return methods[method] || [];
+    }
+  }
+  
+  // 默认需要登录即可访问
+  return [];
+}
+
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
   
@@ -90,6 +199,24 @@ export function middleware(request: NextRequest) {
     
     response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX_REQUESTS));
     response.headers.set('X-RateLimit-Remaining', String(rateLimit.remaining));
+  }
+  
+  // RBAC权限检查（仅对受保护的API请求）
+  if (request.nextUrl.pathname.startsWith('/api/') && !isPublicApi(request.nextUrl.pathname)) {
+    const authResult = await checkApiPermission(request);
+    if (!authResult.allowed) {
+      return new NextResponse(
+        JSON.stringify({
+          success: false,
+          error: authResult.error || '权限不足',
+          code: 'PERMISSION_DENIED'
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
   }
   
   // 添加安全响应头

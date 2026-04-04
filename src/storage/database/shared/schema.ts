@@ -26,6 +26,206 @@ export const users = pgTable("users", {
   index("users_status_idx").on(table.status),
 ]);
 
+// 角色表
+export const roles = pgTable("roles", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  role_code: varchar("role_code", { length: 50 }).notNull().unique(),
+  role_name: varchar("role_name", { length: 50 }).notNull(),
+  description: text("description"),
+  status: varchar("status", { length: 10 }).notNull().default('启用'),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("roles_code_idx").on(table.role_code),
+  index("roles_name_idx").on(table.role_name),
+]);
+
+// 权限表
+export const permissions = pgTable("permissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  permission_code: varchar("permission_code", { length: 100 }).notNull().unique(),
+  permission_name: varchar("permission_name", { length: 100 }).notNull(),
+  resource: varchar("resource", { length: 50 }).notNull(), // 资源类型：menu, api, data
+  action: varchar("action", { length: 50 }).notNull(), // 操作：create, read, update, delete, audit等
+  description: text("description"),
+  status: varchar("status", { length: 10 }).notNull().default('启用'),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("permissions_code_idx").on(table.permission_code),
+  index("permissions_resource_idx").on(table.resource),
+]);
+
+// 角色权限关联表
+export const role_permissions = pgTable("role_permissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  role_id: varchar("role_id", { length: 36 }).notNull().references(() => roles.id),
+  permission_id: varchar("permission_id", { length: 36 }).notNull().references(() => permissions.id),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("role_permissions_role_id_idx").on(table.role_id),
+  index("role_permissions_permission_id_idx").on(table.permission_id),
+]);
+
+// 用户角色关联表
+export const user_roles = pgTable("user_roles", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  user_id: varchar("user_id", { length: 36 }).notNull().references(() => users.id),
+  role_id: varchar("role_id", { length: 36 }).notNull().references(() => roles.id),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("user_roles_user_id_idx").on(table.user_id),
+  index("user_roles_role_id_idx").on(table.role_id),
+]);
+
+// 菜单表
+export const menus = pgTable("menus", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  menu_code: varchar("menu_code", { length: 50 }).notNull().unique(),
+  menu_name: varchar("menu_name", { length: 100 }).notNull(),
+  parent_id: varchar("parent_id", { length: 36 }),
+  path: varchar("path", { length: 200 }),
+  icon: varchar("icon", { length: 50 }),
+  sort_order: integer("sort_order").default(0),
+  status: varchar("status", { length: 10 }).notNull().default('启用'),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("menus_code_idx").on(table.menu_code),
+  index("menus_parent_id_idx").on(table.parent_id),
+  index("menus_sort_order_idx").on(table.sort_order),
+]);
+
+// 菜单权限关联表
+export const menu_permissions = pgTable("menu_permissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  menu_id: varchar("menu_id", { length: 36 }).notNull().references(() => menus.id),
+  permission_id: varchar("permission_id", { length: 36 }).notNull().references(() => permissions.id),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("menu_permissions_menu_id_idx").on(table.menu_id),
+  index("menu_permissions_permission_id_idx").on(table.permission_id),
+]);
+
+// 数据权限表
+export const data_permissions = pgTable("data_permissions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  role_id: varchar("role_id", { length: 36 }).notNull().references(() => roles.id),
+  resource: varchar("resource", { length: 50 }).notNull(), // 数据资源类型：order, customer, employee等
+  condition_type: varchar("condition_type", { length: 20 }).notNull(), // 条件类型：department, creator, all
+  condition_value: varchar("condition_value", { length: 100 }), // 条件值
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("data_permissions_role_id_idx").on(table.role_id),
+  index("data_permissions_resource_idx").on(table.resource),
+]);
+
+// 操作日志表
+export const operation_logs = pgTable("operation_logs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  log_no: varchar("log_no", { length: 30 }).notNull().unique(),
+  module: varchar("module", { length: 50 }).notNull(), // 模块：订单管理、BOM管理等
+  action: varchar("action", { length: 50 }).notNull(), // 操作：新增、编辑、删除等
+  description: text("description"),
+  operator: varchar("operator", { length: 50 }).notNull(), // 操作人
+  operator_id: varchar("operator_id", { length: 36 }),
+  ip_address: varchar("ip_address", { length: 45 }), // 支持IPv6
+  user_agent: text("user_agent"),
+  old_data: jsonb("old_data"), // 操作前数据
+  new_data: jsonb("new_data"), // 操作后数据
+  resource_id: varchar("resource_id", { length: 36 }), // 关联资源ID
+  resource_type: varchar("resource_type", { length: 50 }), // 资源类型
+  status: varchar("status", { length: 20 }).default('成功'), // 成功/失败
+  error_message: text("error_message"),
+  operate_time: timestamp("operate_time", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("operation_logs_log_no_idx").on(table.log_no),
+  index("operation_logs_module_idx").on(table.module),
+  index("operation_logs_operator_idx").on(table.operator),
+  index("operation_logs_operate_time_idx").on(table.operate_time),
+  index("operation_logs_resource_type_idx").on(table.resource_type),
+  index("operation_logs_resource_id_idx").on(table.resource_id),
+]);
+
+// 财务流水表
+export const financial_transactions = pgTable("financial_transactions", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  transaction_no: varchar("transaction_no", { length: 30 }).notNull().unique(),
+  transaction_type: varchar("transaction_type", { length: 20 }).notNull(), // 收入/支出
+  category: varchar("category", { length: 50 }).notNull(), // 分类：订单收入、外协支出、工资支出等
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default('CNY'),
+  related_id: varchar("related_id", { length: 36 }), // 关联业务ID
+  related_type: varchar("related_type", { length: 50 }), // 关联业务类型：order, outsourcing, salary等
+  description: text("description"),
+  operator: varchar("operator", { length: 50 }),
+  operator_id: varchar("operator_id", { length: 36 }),
+  transaction_date: timestamp("transaction_date", { withTimezone: true }).defaultNow().notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("financial_transactions_no_idx").on(table.transaction_no),
+  index("financial_transactions_type_idx").on(table.transaction_type),
+  index("financial_transactions_category_idx").on(table.category),
+  index("financial_transactions_related_id_idx").on(table.related_id),
+  index("financial_transactions_date_idx").on(table.transaction_date),
+]);
+
+// 员工计件薪资表
+export const piece_rate_salaries = pgTable("piece_rate_salaries", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  salary_no: varchar("salary_no", { length: 30 }).notNull().unique(),
+  employee_id: varchar("employee_id", { length: 36 }).notNull().references(() => employees.id),
+  employee_name: varchar("employee_name", { length: 50 }),
+  period_start: timestamp("period_start", { withTimezone: true }).notNull(),
+  period_end: timestamp("period_end", { withTimezone: true }).notNull(),
+  work_reports: jsonb("work_reports"), // 报工记录详情
+  total_quantity: integer("total_quantity").default(0),
+  unit_price: numeric("unit_price", { precision: 8, scale: 2 }).default('0'), // 计件单价
+  total_amount: numeric("total_amount", { precision: 10, scale: 2 }).default('0'),
+  base_wage: numeric("base_wage", { precision: 10, scale: 2 }).default('0'), // 基本工资
+  subsidy: numeric("subsidy", { precision: 10, scale: 2 }).default('0'), // 补贴
+  deductions: numeric("deductions", { precision: 10, scale: 2 }).default('0'), // 扣款
+  net_amount: numeric("net_amount", { precision: 10, scale: 2 }).default('0'), // 实发金额
+  status: varchar("status", { length: 20 }).default('待审核'), // 待审核/已审核/已发放
+  audited_by: varchar("audited_by", { length: 50 }),
+  audited_at: timestamp("audited_at", { withTimezone: true }),
+  payment_date: timestamp("payment_date", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("piece_rate_salaries_no_idx").on(table.salary_no),
+  index("piece_rate_salaries_employee_id_idx").on(table.employee_id),
+  index("piece_rate_salaries_period_idx").on(table.period_start, table.period_end),
+  index("piece_rate_salaries_status_idx").on(table.status),
+]);
+
+// 供应商付款表
+export const supplier_payments = pgTable("supplier_payments", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  payment_no: varchar("payment_no", { length: 30 }).notNull().unique(),
+  supplier_id: varchar("supplier_id", { length: 36 }).notNull().references(() => suppliers.id),
+  supplier_name: varchar("supplier_name", { length: 100 }),
+  outsourcing_id: varchar("outsourcing_id", { length: 36 }), // 关联外协ID
+  outsourcing_no: varchar("outsourcing_no", { length: 30 }),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default('CNY'),
+  payment_method: varchar("payment_method", { length: 20 }), // 付款方式
+  payment_date: timestamp("payment_date", { withTimezone: true }),
+  due_date: timestamp("due_date", { withTimezone: true }),
+  status: varchar("status", { length: 20 }).default('待付款'), // 待付款/部分付款/已付款/逾期
+  description: text("description"),
+  operator: varchar("operator", { length: 50 }),
+  operator_id: varchar("operator_id", { length: 36 }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("supplier_payments_no_idx").on(table.payment_no),
+  index("supplier_payments_supplier_id_idx").on(table.supplier_id),
+  index("supplier_payments_outsourcing_id_idx").on(table.outsourcing_id),
+  index("supplier_payments_status_idx").on(table.status),
+  index("supplier_payments_due_date_idx").on(table.due_date),
+]);
+
 // 客户表
 export const customers = pgTable("customers", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
