@@ -1,103 +1,150 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   ScanLine,
-  Keyboard,
-  History,
-  User,
   Package,
-  Palette,
-  Hash,
-  CheckCircle,
-  XCircle,
-  Camera,
-  SwitchCamera,
-  Loader2,
-  ChevronRight,
   Shirt,
-  Clock,
+  QrCode,
+  ArrowRight,
+  Warehouse,
+  Users,
 } from 'lucide-react';
-import {
-  type Bundle,
-  type StandardProcess,
-  getBundleByNo,
-  getProcesses,
-  initWorkshopData,
-  saveWorkReport,
-  generateReportNo,
-} from '@/types/workshop';
 
 export default function ScanPage() {
-  const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const [mode, setMode] = useState<'scan' | 'input'>('scan');
-  const [scanning, setScanning] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [manualInput, setManualInput] = useState('');
-  const [bundle, setBundle] = useState<Bundle | null>(null);
-  const [processes, setProcesses] = useState<StandardProcess[]>([]);
-  const [selectedProcess, setSelectedProcess] = useState<string>('');
-  const [goodQty, setGoodQty] = useState<number>(0);
-  const [reworkQty, setReworkQty] = useState<number>(0);
-  const [scrapQty, setScrapQty] = useState<number>(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [currentWorker, setCurrentWorker] = useState<string>('王五');
-  const [currentTeam, setCurrentTeam] = useState<string>('缝制一组');
+  return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="container mx-auto px-4 py-8">
+        {/* 头部 */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            扫描中心
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400">
+            选择扫描类型进行相应的操作
+          </p>
+        </div>
 
-  useEffect(() => {
-    initWorkshopData();
-    setProcesses(getProcesses());
-    
-    // 尝试启动摄像头
-    startCamera();
-    
-    return () => {
-      stopCamera();
-    };
-  }, []);
+        {/* 扫描类型选择 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {/* 物料二维码扫描 */}
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Package className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <CardTitle className="text-xl">物料二维码扫描</CardTitle>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                扫描物料二维码进行入库、出库、领料操作
+              </p>
+            </CardHeader>
+            <CardContent className="text-center">
+              <Link href="/dashboard/scan/material">
+                <Button className="w-full">
+                  开始扫描
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-  const startCamera = async () => {
-    try {
-      setCameraError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setScanning(true);
-      }
-    } catch (err: unknown) {
-      console.error('摄像头错误:', err);
-      setCameraError('无法访问摄像头，请使用手动输入');
-      setScanning(false);
-    }
-  };
+          {/* 扎号扫描（车间报工） */}
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shirt className="w-8 h-8 text-green-600 dark:text-green-400" />
+              </div>
+              <CardTitle className="text-xl">扎号扫描（报工）</CardTitle>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                扫描生产扎号进行工序报工和产量录入
+              </p>
+            </CardHeader>
+            <CardContent className="text-center">
+              <Link href="/dashboard/scan/worker">
+                <Button className="w-full">
+                  开始报工
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-      tracks.forEach(track => track.stop());
-    }
-  };
+          {/* 通用二维码扫描 */}
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                <QrCode className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+              </div>
+              <CardTitle className="text-xl">通用二维码扫描</CardTitle>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                扫描各种类型的二维码，自动识别并处理
+              </p>
+            </CardHeader>
+            <CardContent className="text-center">
+              <Button className="w-full" disabled>
+                敬请期待
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
-  const handleScan = useCallback(() => {
-    // 模拟扫码结果
-    const testBundleNos = ['BN20250101001', 'BN20250101002', 'ZY20260401001'];
-    const randomBundle = testBundleNos[Math.floor(Math.random() * testBundleNos.length)];
-    lookupBundle(randomBundle);
-  }, []);
+        {/* 功能说明 */}
+        <div className="mt-12 max-w-4xl mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ScanLine className="w-5 h-5" />
+                扫描功能说明
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    物料二维码扫描
+                  </h4>
+                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li>• 支持物料入库、出库、领料操作</li>
+                    <li>• 自动更新库存数量</li>
+                    <li>• 记录完整的操作日志</li>
+                    <li>• 支持摄像头扫描和手动输入</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <Shirt className="w-4 h-4 text-green-600" />
+                    扎号扫描（报工）
+                  </h4>
+                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <li>• 车间工人扫描扎号进行报工</li>
+                    <li>• 录入合格品、返工品、废品数量</li>
+                    <li>• 自动计算工时和效率</li>
+                    <li>• 支持多工序连续报工</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 快捷操作 */}
+        <div className="mt-8 text-center">
+          <Link href="/dashboard/scan/history">
+            <Button variant="outline">
+              <Warehouse className="w-4 h-4 mr-2" />
+              查看扫描历史
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
   const handleManualInput = () => {
     if (manualInput.trim()) {
