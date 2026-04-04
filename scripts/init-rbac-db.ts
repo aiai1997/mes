@@ -101,6 +101,10 @@ async function initializeDefaultRBACData() {
     { permission_code: 'finance:audit', permission_name: '财务审核', resource: 'api', action: 'audit' },
     { permission_code: 'material:manage', permission_name: '物料管理', resource: 'api', action: 'manage' },
     { permission_code: 'material:scan', permission_name: '物料扫描', resource: 'api', action: 'scan' },
+    { permission_code: 'backup:create', permission_name: '创建备份', resource: 'api', action: 'create' },
+    { permission_code: 'backup:restore', permission_name: '恢复备份', resource: 'api', action: 'restore' },
+    { permission_code: 'backup:delete', permission_name: '删除备份', resource: 'api', action: 'delete' },
+    { permission_code: 'menu:backup', permission_name: '数据备份', resource: 'menu', action: 'read' },
   ];
 
   for (const permission of defaultPermissions) {
@@ -121,6 +125,7 @@ async function initializeDefaultRBACData() {
     { menu_code: 'quality', menu_name: '品质管理', path: '/dashboard/quality', sort_order: 7 },
     { menu_code: 'finance', menu_name: '财务管理', path: '/dashboard/finance', sort_order: 8 },
     { menu_code: 'logs', menu_name: '操作日志', path: '/dashboard/logs', sort_order: 9 },
+    { menu_code: 'backup', menu_name: '数据备份', path: '/dashboard/backup', sort_order: 10 },
   ];
 
   for (const menu of defaultMenus) {
