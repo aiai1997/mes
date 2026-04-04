@@ -167,7 +167,7 @@ function getRequiredPermissions(pathname: string, method: string): string[] {
   return [];
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   
   // 获取客户端IP（考虑代理）
@@ -207,21 +207,16 @@ export function middleware(request: NextRequest) {
     if (!authResult.allowed) {
       return new NextResponse(
         JSON.stringify({
+          code: 403,
           success: false,
-          error: authResult.error || '权限不足',
-          code: 'PERMISSION_DENIED'
+          message: authResult.error || '权限不足',
+          error: authResult.error || 'PERMISSION_DENIED'
         }),
         {
           status: 403,
           headers: { 'Content-Type': 'application/json' }
         }
       );
-    }
-
-    // 设置全局用户ID供数据权限过滤使用
-    const userId = request.headers.get('x-user-id');
-    if (userId) {
-      (global as any).currentUserId = userId;
     }
   }
   

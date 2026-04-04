@@ -3,11 +3,11 @@
  */
 
 export interface ApiResponse<T = any> {
+  code: number;
   success: boolean;
+  message: string;
   data?: T;
   error?: string;
-  message?: string;
-  code?: string;
   timestamp: string;
   requestId?: string;
 }
@@ -35,14 +35,14 @@ export interface ListQuery {
  */
 export function createSuccessResponse<T = any>(
   data?: T,
-  message?: string,
-  code?: string
+  message = 'ok',
+  code = 200
 ): ApiResponse<T> {
   return {
-    success: true,
-    data,
-    message,
     code,
+    success: true,
+    message,
+    data,
     timestamp: new Date().toISOString(),
   };
 }
@@ -52,14 +52,14 @@ export function createSuccessResponse<T = any>(
  */
 export function createErrorResponse(
   error: string,
-  code?: string,
-  message?: string
+  code = 500,
+  message = 'error'
 ): ApiResponse {
   return {
-    success: false,
-    error,
-    message,
     code,
+    success: false,
+    message,
+    error,
     timestamp: new Date().toISOString(),
   };
 }
@@ -74,14 +74,15 @@ export function createPaginatedResponse<T = any>(
     pageSize: number;
     total: number;
   },
-  message?: string
+  message = 'ok'
 ): PaginatedResponse<T> {
   const totalPages = Math.ceil(pagination.total / pagination.pageSize);
 
   return {
+    code: 200,
     success: true,
-    data,
     message,
+    data,
     timestamp: new Date().toISOString(),
     pagination: {
       ...pagination,
@@ -159,19 +160,43 @@ export function applyListQuery<T>(
 }
 
 /**
+ * 创建统一API路由处理器
+ */
+export function createApiHandler<T extends any[], R>(
+  handler: (...args: T) => Promise<R>
+) {
+  return async (...args: T): Promise<Response> => {
+    try {
+      const result = await handler(...args);
+      return new Response(JSON.stringify(createSuccessResponse(result)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      console.error('API处理失败:', error);
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const status = (error as any)?.status || (errorMessage === '权限不足' ? 403 : 500);
+      const code = (error as any)?.code || (status === 403 ? 403 : 500);
+      return new Response(JSON.stringify(createErrorResponse(errorMessage, code, errorMessage)), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  };
+}
+
+/**
  * 统一的错误处理包装器
  */
 export function withErrorHandler<T extends any[], R>(
   handler: (...args: T) => Promise<R>
 ) {
-  return async (...args: T): Promise<ApiResponse<R>> => {
+  return async (...args: T): Promise<R> => {
     try {
-      const result = await handler(...args);
-      return createSuccessResponse(result);
+      return await handler(...args);
     } catch (error) {
       console.error('API错误:', error);
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
-      return createErrorResponse(errorMessage, 'INTERNAL_ERROR');
+      throw error;
     }
   };
 }
@@ -183,50 +208,62 @@ export function withPermissionCheck<T extends any[], R>(
   handler: (...args: T) => Promise<R>,
   requiredPermissions: string[]
 ) {
-  return async (...args: T): Promise<ApiResponse<R>> => {
-    try {
-      // 这里应该从请求上下文中获取用户信息并检查权限
-      // 由于这是服务端函数，我们假设权限检查已在中间件中完成
-      const result = await handler(...args);
-      return createSuccessResponse(result);
-    } catch (error) {
-      console.error('权限检查失败:', error);
-      return createErrorResponse('权限不足', 'PERMISSION_DENIED');
+  return async (...args: T): Promise<R> => {
+    const request = args[0] as Request | undefined;
+    const userId = request instanceof Request ? request.headers.get('x-user-id') : undefined;
+
+    if (!userId) {
+      const err = new Error('未认证用户');
+      (err as any).status = 401;
+      throw err;
     }
+
+    const { checkUserPermission } = await import('./rbac-service');
+    const hasPermission = await checkUserPermission(userId, requiredPermissions);
+    if (!hasPermission) {
+      const err = new Error('权限不足');
+      (err as any).status = 403;
+      throw err;
+    }
+
+    return handler(...args);
   };
 }
 
 /**
  * 数据权限过滤包装器
  */
-export function withDataPermissionFilter<T extends any[], R extends any[]>(
+export function withDataPermissionFilter<T extends any[], R extends any>(
   handler: (...args: T) => Promise<R>,
   resource: string
 ) {
-  return async (...args: T): Promise<ApiResponse<R>> => {
-    try {
-      const result = await handler(...args);
+  return async (...args: T): Promise<R> => {
+    const request = args[0] as Request | undefined;
+    const userId = request instanceof Request ? request.headers.get('x-user-id') : undefined;
+    const result = await handler(...args);
 
-      // 从请求上下文中获取用户ID（这里需要根据实际的认证中间件调整）
-      const userId = (global as any).currentUserId; // 临时方案，实际应该从middleware传递
-
-      if (userId && Array.isArray(result)) {
-        // 获取数据权限过滤器
-        const { getDataPermissionFilter, applyDataPermissionFilter } = await import('./rbac-service');
-        const filter = await getDataPermissionFilter(userId, resource);
-
-        if (filter) {
-          // 应用数据权限过滤
-          const filteredResult = applyDataPermissionFilter(result, filter);
-          return createSuccessResponse(filteredResult as R);
-        }
-      }
-
-      return createSuccessResponse(result);
-    } catch (error) {
-      console.error('数据权限过滤失败:', error);
-      return createErrorResponse('数据访问失败', 'DATA_ACCESS_DENIED');
+    if (!userId) {
+      return result;
     }
+
+    const { getDataPermissionFilter, applyDataPermissionFilter } = await import('./rbac-service');
+    const filter = await getDataPermissionFilter(userId, resource);
+    if (!filter) {
+      return result;
+    }
+
+    if (Array.isArray(result)) {
+      return applyDataPermissionFilter(result as any, filter) as unknown as R;
+    }
+
+    if (result && typeof result === 'object' && Array.isArray((result as any).data)) {
+      return {
+        ...(result as any),
+        data: applyDataPermissionFilter((result as any).data, filter) as any,
+      } as unknown as R;
+    }
+
+    return result;
   };
 }
 

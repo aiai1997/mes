@@ -594,3 +594,42 @@ export const stock_items = pgTable("stock_items", {
   index("stock_items_material_id_idx").on(table.material_id),
   index("stock_items_batch_no_idx").on(table.batch_no),
 ]);
+
+// 物料二维码表
+export const material_qrcodes = pgTable("material_qrcodes", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  qrcode_no: varchar("qrcode_no", { length: 30 }).notNull().unique(),
+  material_id: varchar("material_id", { length: 36 }).references(() => materials.id),
+  material_code: varchar("material_code", { length: 20 }),
+  material_name: varchar("material_name", { length: 100 }),
+  batch_no: varchar("batch_no", { length: 30 }),
+  quantity: integer("quantity").default(0),
+  unit: varchar("unit", { length: 10 }).default('米'),
+  manufacture_date: varchar("manufacture_date", { length: 20 }),
+  qrcode_image: text("qrcode_image"), // base64编码的二维码图片
+  status: varchar("status", { length: 10 }).notNull().default('启用'),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+}, (table) => [
+  index("material_qrcodes_no_idx").on(table.qrcode_no),
+  index("material_qrcodes_material_id_idx").on(table.material_id),
+  index("material_qrcodes_batch_no_idx").on(table.batch_no),
+]);
+
+// 二维码扫描日志表
+export const qrcode_scan_logs = pgTable("qrcode_scan_logs", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  qrcode_no: varchar("qrcode_no", { length: 30 }).notNull(),
+  action: varchar("action", { length: 10 }).notNull(), // 入库/出库/领料
+  location: varchar("location", { length: 50 }),
+  operator_id: varchar("operator_id", { length: 36 }),
+  operator_name: varchar("operator_name", { length: 50 }),
+  ip_address: varchar("ip_address", { length: 45 }),
+  scan_time: timestamp("scan_time", { withTimezone: true }).defaultNow().notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("qrcode_scan_logs_qrcode_no_idx").on(table.qrcode_no),
+  index("qrcode_scan_logs_action_idx").on(table.action),
+  index("qrcode_scan_logs_operator_id_idx").on(table.operator_id),
+  index("qrcode_scan_logs_scan_time_idx").on(table.scan_time),
+]);

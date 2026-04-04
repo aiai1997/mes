@@ -4,14 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createApiHandler } from '@/lib/api-response';
+import { createApiHandler, withPermissionCheck, withDataPermissionFilter, createErrorResponse } from '@/lib/api-response';
 import {
   createFinancialTransaction,
   createPieceRateSalary,
+  createSupplierPayment,
   processSupplierPayment,
   getFinancialStatistics
 } from '@/lib/finance-service';
-import { withPermissionCheck, withDataPermissionFilter } from '@/lib/api-response';
+import { getSupabaseClient } from '@/storage/database/supabase-client';
 
 // 获取财务流水
 const getTransactions = createApiHandler(
@@ -20,18 +21,36 @@ const getTransactions = createApiHandler(
       async (request: NextRequest) => {
         const { searchParams } = new URL(request.url);
         const page = parseInt(searchParams.get('page') || '1');
-        const limit = parseInt(searchParams.get('limit') || '20');
+        const pageSize = parseInt(searchParams.get('limit') || '20');
         const category = searchParams.get('category');
         const startDate = searchParams.get('startDate');
         const endDate = searchParams.get('endDate');
 
-        // 这里应该实现财务流水查询逻辑
-        // 暂时返回空数组
+        const client = getSupabaseClient();
+        let query = client.from('financial_transactions').select('*', { count: 'exact' });
+
+        if (category) {
+          query = query.eq('category', category);
+        }
+        if (startDate) {
+          query = query.gte('transaction_date', startDate);
+        }
+        if (endDate) {
+          query = query.lte('transaction_date', endDate);
+        }
+
+        query = query.order('transaction_date', { ascending: false });
+        const offset = (page - 1) * pageSize;
+        query = query.range(offset, offset + pageSize - 1);
+
+        const { data, error, count } = await query;
+        if (error) throw error;
+
         return {
-          data: [],
-          total: 0,
+          data: data || [],
           page,
-          limit
+          pageSize,
+          total: count || 0,
         };
       },
       'finance'
@@ -70,7 +89,7 @@ const createSalary = createApiHandler(
     async (request: NextRequest) => {
       const body = await request.json();
 
-      const salary = await createPieceRateSalary({
+      return createPieceRateSalary({
         employeeId: body.employeeId,
         periodStart: body.periodStart,
         periodEnd: body.periodEnd,
@@ -80,10 +99,26 @@ const createSalary = createApiHandler(
         subsidy: body.subsidy,
         deductions: body.deductions,
         operator: body.operator,
-        operatorId: body.operatorId,
       });
+    },
+    ['finance:create']
+  )
+);
 
-      return salary;
+// 创建供应商付款
+const createPayment = createApiHandler(
+  withPermissionCheck(
+    async (request: NextRequest) => {
+      const body = await request.json();
+
+      return createSupplierPayment({
+        supplierId: body.supplierId,
+        amount: body.amount,
+        paymentMethod: body.paymentMethod,
+        dueDate: body.dueDate,
+        description: body.description,
+        operator: body.operator,
+      });
     },
     ['finance:create']
   )
@@ -94,18 +129,18 @@ const processPayment = createApiHandler(
   withPermissionCheck(
     async (request: NextRequest) => {
       const body = await request.json();
+      const paymentId = body.paymentId;
+      const paymentDate = body.paymentDate || new Date().toISOString();
 
-      const payment = await processSupplierPayment({
-        supplierId: body.supplierId,
-        amount: body.amount,
-        paymentMethod: body.paymentMethod,
-        relatedOrders: body.relatedOrders,
-        description: body.description,
-        operator: body.operator,
-        operatorId: body.operatorId,
-      });
+      if (!paymentId) {
+        throw new Error('缺少 paymentId');
+      }
 
-      return payment;
+      await processSupplierPayment(paymentId, paymentDate, body.operator);
+      return {
+        paymentId,
+        status: '已付款',
+      };
     },
     ['finance:audit']
   )
@@ -116,17 +151,32 @@ const getStatistics = createApiHandler(
   withPermissionCheck(
     async (request: NextRequest) => {
       const { searchParams } = new URL(request.url);
-      const period = searchParams.get('period') || 'month';
+      const startDate = searchParams.get('startDate');
+      const endDate = searchParams.get('endDate');
 
-      const statistics = await getFinancialStatistics(period);
-      return statistics;
+      return getFinancialStatistics(
+        startDate && endDate ? { start: startDate, end: endDate } : undefined
+      );
     },
     ['finance:view']
   )
 );
 
 export const GET = getTransactions;
-export const POST = createTransaction;
+
+export async function POST(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get('action');
+
+  switch (action) {
+    case 'payment':
+      return createPayment(request);
+    case 'salary':
+      return createSalary(request);
+    default:
+      return createTransaction(request);
+  }
+}
 
 // 为了支持不同的操作，使用动态路由
 export async function PUT(request: NextRequest) {
@@ -141,9 +191,9 @@ export async function PUT(request: NextRequest) {
     case 'statistics':
       return getStatistics(request);
     default:
-      return NextResponse.json(
-        { success: false, error: '无效的操作' },
-        { status: 400 }
-      );
+      return new Response(JSON.stringify(createErrorResponse('无效的操作', 400, 'Bad Request')), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
   }
 }
