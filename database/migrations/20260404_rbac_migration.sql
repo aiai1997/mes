@@ -220,6 +220,7 @@ ON CONFLICT (role_code) DO NOTHING;
 INSERT INTO permissions (permission_code, permission_name, resource, action, description) VALUES
 -- 菜单权限
 ('menu:dashboard', '仪表板访问', 'menu', 'read', '访问系统仪表板'),
+('menu:screen', '数据大屏', 'menu', 'read', '数据大屏菜单'),
 ('menu:orders', '订单管理', 'menu', 'read', '订单管理菜单'),
 ('menu:bom', 'BOM管理', 'menu', 'read', 'BOM管理菜单'),
 ('menu:cutting', '裁床管理', 'menu', 'read', '裁床管理菜单'),
@@ -229,6 +230,7 @@ INSERT INTO permissions (permission_code, permission_name, resource, action, des
 ('menu:logs', '操作日志', 'menu', 'read', '操作日志菜单'),
 
 -- API权限
+('dashboard:view', '查看数据大屏', 'api', 'read', '查看数据大屏'),
 ('order:create', '创建订单', 'api', 'create', '创建新订单'),
 ('order:read', '查看订单', 'api', 'read', '查看订单信息'),
 ('order:update', '编辑订单', 'api', 'update', '编辑订单信息'),
@@ -237,17 +239,20 @@ INSERT INTO permissions (permission_code, permission_name, resource, action, des
 ('bom:audit', '审核BOM', 'api', 'audit', '审核BOM'),
 ('finance:view', '查看财务数据', 'api', 'read', '查看财务数据'),
 ('finance:audit', '财务审核', 'api', 'audit', '财务审核操作'),
+('material:manage', '物料管理', 'api', 'manage', '物料管理'),
+('material:scan', '物料扫描', 'api', 'scan', '物料扫描'),
 ('logs:read', '查看日志', 'api', 'read', '查看操作日志')
 ON CONFLICT (permission_code) DO NOTHING;
 
 -- 插入默认菜单数据
 INSERT INTO menus (menu_code, menu_name, path, sort_order) VALUES
 ('dashboard', '仪表板', '/dashboard', 1),
-('orders', '订单管理', '/dashboard/orders', 2),
-('bom', 'BOM管理', '/dashboard/bom', 3),
-('cutting', '裁床管理', '/dashboard/cutting', 4),
-('workshop', '车间管理', '/dashboard/workshop', 5),
-('quality', '品质管理', '/dashboard/quality', 6),
+('screen', '数据大屏', '/dashboard/screen', 2),
+('orders', '订单管理', '/dashboard/orders', 3),
+('bom', 'BOM管理', '/dashboard/bom', 4),
+('cutting', '裁床管理', '/dashboard/cutting', 5),
+('workshop', '车间管理', '/dashboard/workshop', 6),
+('quality', '品质管理', '/dashboard/quality', 7),
 ('finance', '财务管理', '/dashboard/finance', 7),
 ('logs', '操作日志', '/dashboard/logs', 8)
 ON CONFLICT (menu_code) DO NOTHING;
@@ -275,11 +280,20 @@ WHERE r.role_code = 'finance'
   AND p.permission_code IN ('menu:dashboard', 'menu:finance', 'finance:view', 'finance:audit')
 ON CONFLICT DO NOTHING;
 
+-- 为老板角色分配数据大屏权限
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r, permissions p
+WHERE r.role_code = 'boss'
+  AND p.permission_code IN ('menu:dashboard', 'menu:screen', 'dashboard:view', 'finance:view')
+ON CONFLICT DO NOTHING;
+
 -- 为菜单分配权限
 INSERT INTO menu_permissions (menu_id, permission_id)
 SELECT m.id, p.id
 FROM menus m, permissions p
 WHERE m.menu_code = 'dashboard' AND p.permission_code = 'menu:dashboard'
+   OR m.menu_code = 'screen' AND p.permission_code = 'menu:screen'
    OR m.menu_code = 'orders' AND p.permission_code = 'menu:orders'
    OR m.menu_code = 'bom' AND p.permission_code = 'menu:bom'
    OR m.menu_code = 'cutting' AND p.permission_code = 'menu:cutting'
