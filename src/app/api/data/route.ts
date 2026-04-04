@@ -3,6 +3,26 @@ import fs from 'fs';
 import path from 'path';
 import { sanitizeInput } from '@/lib/security';
 
+function getCsrfTokenFromRequest(request: NextRequest): string | null {
+  const headerToken = request.headers.get('x-csrf-token');
+  if (headerToken) return headerToken;
+
+  try {
+    const url = new URL(request.url);
+    return url.searchParams.get('csrf_token');
+  } catch {
+    return null;
+  }
+}
+
+function isCsrfValid(request: NextRequest): boolean {
+  const token = getCsrfTokenFromRequest(request);
+  if (!token) return false;
+
+  const cookieToken = request.cookies.get('erp_csrf_token')?.value;
+  return Boolean(cookieToken && cookieToken === token);
+}
+
 // 数据文件路径 - 生产环境用 /tmp，开发环境用项目目录
 const getDataPath = () => {
   const isProd = process.env.COZE_PROJECT_ENV === 'PROD';
@@ -147,6 +167,13 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    if (!isCsrfValid(request)) {
+      return NextResponse.json(
+        { success: false, error: 'CSRF 验证失败' },
+        { status: 403, headers }
+      );
+    }
+
     const bodyText = await request.text();
     const parseResult = safeJsonParse(bodyText);
     
@@ -209,6 +236,13 @@ export async function DELETE(request: NextRequest) {
     const url = new URL(request.url);
     const confirm = url.searchParams.get('confirm');
     
+    if (!isCsrfValid(request)) {
+      return NextResponse.json(
+        { success: false, error: 'CSRF 验证失败' },
+        { status: 403, headers }
+      );
+    }
+
     if (confirm !== 'DELETE_ALL_DATA_CONFIRMED') {
       return NextResponse.json(
         { 

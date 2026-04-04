@@ -9,6 +9,7 @@
  */
 
 import { TABLES } from './schema';
+import { getCsrfToken } from '@/lib/security';
 
 // 同步状态
 let isSyncing = false;
@@ -127,7 +128,10 @@ export async function saveToServer(): Promise<{ success: boolean; message?: stri
     // 发送到服务端
     const response = await fetch('/api/data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
       body: JSON.stringify(data)
     });
     
@@ -236,8 +240,10 @@ export function startSyncWatch(): void {
     });
     
     // 使用 sendBeacon 发送
+    const csrfToken = getCsrfToken();
+    const beaconUrl = csrfToken ? `/api/data?csrf_token=${encodeURIComponent(csrfToken)}` : '/api/data';
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    navigator.sendBeacon('/api/data', blob);
+    navigator.sendBeacon(beaconUrl, blob);
   });
   
   // 页面隐藏时保存
@@ -310,7 +316,10 @@ export async function manualSync(): Promise<{ success: boolean; message: string 
 export async function clearServerData(): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch('/api/data', {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-Token': getCsrfToken()
+      }
     });
     
     const result = await response.json();

@@ -728,7 +728,10 @@ export function refreshSession(): void {
  */
 export function generateCsrfToken(): string {
   const token = generateSecureId('CSRF');
-  localStorage.setItem('erp_csrf_token', token);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('erp_csrf_token', token);
+    document.cookie = `erp_csrf_token=${token}; path=/; sameSite=strict`;
+  }
   return token;
 }
 
@@ -736,8 +739,25 @@ export function generateCsrfToken(): string {
  * 验证CSRF令牌
  */
 export function validateCsrfToken(token: string): boolean {
+  if (!token) return false;
+  if (typeof window === 'undefined') return false;
+
   const storedToken = localStorage.getItem('erp_csrf_token');
   return storedToken === token;
+}
+
+/**
+ * 获取或创建 CSRF 令牌
+ */
+export function getCsrfToken(): string {
+  if (typeof window === 'undefined') return '';
+
+  let token = localStorage.getItem('erp_csrf_token');
+  if (!token) {
+    token = generateCsrfToken();
+  }
+
+  return token;
 }
 
 /**
